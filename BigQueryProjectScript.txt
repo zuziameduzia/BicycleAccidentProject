@@ -1,0 +1,95 @@
+--data about bicycle accidents in GB between 1979 and 2018 downloaded from Kaggle
+
+--Annual trends in the number of accidents
+SELECT 
+  FORMAT_DATE('%Y-%m', Date) AS Month, 
+  COUNT(*) AS Accident_Count
+FROM 
+  `sql-project-423716.data.accidents`
+GROUP BY 
+  Month
+ORDER BY 
+  Month;
+--conclusion: Number of bicycle accidents in GB decreased over the years.
+
+--Analysis of the impact of the day of the week and time on the number of bicycle accidents
+WITH HourlyAccidents AS (
+    SELECT 
+        Day,
+        EXTRACT(HOUR FROM PARSE_TIME('%H:%M', Time)) AS Hour,
+        COUNT(*) AS Total_Accidents
+    FROM 
+        `sql-project-423716.data.accidents`
+    GROUP BY 
+        Day, Hour
+)
+SELECT 
+    Day,
+    Hour,
+    Total_Accidents,
+    AVG(Total_Accidents) OVER (PARTITION BY Day ORDER BY Hour) AS Avg_Hourly_Accidents_By_Day
+FROM 
+    HourlyAccidents
+ORDER BY 
+   Avg_Hourly_Accidents_By_Day DESC;
+--conclusion: Most bicycle accidents in GB in the years 1979-2018 occurred between Monday and Thursday (working days) in the afternoon (around 5 p.m.). Looking at the average cumulative number of accidents for individual days, the fewest accidents occurred on Sunday and the most on Wednesday. 
+
+--Severity of bicycle accidents in different conditions and roads
+SELECT 
+  Weather_conditions,
+  Road_conditions,
+  Severity,
+  COUNT(*) AS Total_Accidents,
+  ROW_NUMBER() OVER (PARTITION BY Weather_conditions ORDER BY COUNT(*) DESC) AS Severity_Rank
+FROM 
+  `sql-project-423716.data.accidents` a
+JOIN 
+  `sql-project-423716.data.bikers` b
+ON 
+  a.Accident_Index = b.Accidents_Index
+GROUP BY 
+  Weather_conditions, Road_conditions, Severity
+ORDER BY 
+  Weather_conditions, Severity_Rank;
+--conclusion: Most accidents in GB between 1979 and 2018 (495 730) occurred in clear weather, when roads were dry and the injuries suffered by accident victims were fortunately not serious.
+
+--Light conditions vs. number of accidents
+SELECT 
+  Light_conditions, 
+  COUNT(*) AS Accident_Count
+FROM 
+  `sql-project-423716.data.accidents`
+GROUP BY 
+  Light_conditions
+ORDER BY 
+  Accident_Count DESC;
+--conclusion: The vast majority of bicycle accidents occur during the day when it is bright.
+
+--Average number of accident casualties depending on speed limit
+SELECT DISTINCT
+  Speed_limit,
+  ROUND((AVG(Number_of_Casualties) OVER (PARTITION BY CAST(Speed_limit AS string))),2) AS Avg_Casualties
+FROM 
+  `sql-project-423716.data.accidents`
+ORDER BY 
+  Avg_Casualties DESC;
+--conclusion: The highest average of bicycle accident casualties in Great Britain between 1979 and 2018 was 2 for a speed limit of 26 km/h.
+
+--Analysis of the accident rate depending on age and gender
+SELECT 
+  b.Age_Grp, 
+  b.Gender, 
+  COUNT(DISTINCT a.Accident_Index) AS Total_Accidents,
+  ROUND(COUNT(a.Accident_Index) * 100.0 / SUM(COUNT(a.Accident_Index)) OVER (), 2) AS Percentage_Accidents
+FROM 
+  `sql-project-423716.data.bikers` b
+JOIN 
+  `sql-project-423716.data.accidents` a
+ON 
+  b.Accidents_Index = a.Accident_Index
+GROUP BY 
+  b.Age_Grp, 
+  b.Gender
+ORDER BY 
+  Total_Accidents DESC;
+--conclusion: The participants in most bicycle accidents (74.4%) in Great Britain between 1979 and 2018 were men aged 6-55.
